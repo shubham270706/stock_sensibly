@@ -16,12 +16,18 @@ from datetime import datetime, timedelta
 
 PERIOD_DAYS = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825}
 
-df = get_data(ticker)
 
-if df.empty:
+
+@sl.cache_data(ttl=3600, show_spinner="Training models...")
+def run_models(ticker):
+    return train_and_evaluate(get_data(ticker)) 
+
+full_df = get_data(ticker)
+
+if full_df.empty:
     sl.error("No data found. Check the ticker symbol.")
 else:
-    df = add_indicators(df)
+    df = add_indicators(full_df)
     df = df[df.index >= datetime.now() - timedelta(days=PERIOD_DAYS[period])]
     # ...chart code stays the same
     fig = go.Figure()
@@ -37,10 +43,17 @@ else:
     sl.plotly_chart(fig, use_container_width=True)
     sl.dataframe(df.tail(10))
 
-    result = train_and_evaluate(df)
-    sl.subheader("Prediction (experimental)")
-    col1, col2, col3 = sl.columns(3)
-    col1.metric("Predicted next-day return", f"{result['next_return']*100:.2f}%")
-    col2.metric("Direction accuracy", f"{result['direction_acc']*100:.1f}%")
-    col3.metric("Beats baseline?", "Yes" if result["mae_model"] < result["mae_baseline"] else "No")
-    sl.caption("Learning project, not financial advice, unless you dumb as hell.")
+    sl.subheader("Model comparison (experimental)")
+    try:
+        result = run_models(ticker)
+        sl.caption(f"Trained on {result['n_train']} days, tested on the latest "
+                   f"{result['n_test']} days (from {result['test_start'].date()}).")
+        sl.dataframe(result["results"].style.format({
+            "Direction acc (%)": "{:.1f}", "MAE (%)": "{:.3f}",
+            "RMSE (%)": "{:.3f}", "R2": "{:.3f}", "Next-day return (%)": "{:.2f}"}))
+        c1, c2 = sl.columns(2)
+        c1.metric("Baseline: always predict 'up'", f"{result['baseline_direction']:.1f}%")
+        c2.metric("Baseline MAE (predict 0%)", f"{result['baseline_mae']:.3f}%")
+    except ValueError as e:
+        sl.warning(str(e))
+    sl.caption("Learning project, not financial advice.")
