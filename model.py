@@ -7,11 +7,9 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 LAGS = 5
-MIN_ROWS = 20  # below this the train/test split is too small to mean anything
-
+MIN_ROWS = 150  
 
 def make_models():
-    """Fresh, untrained models. Add or remove entries to change the comparison."""
     return {
         "Linear Regression": LinearRegression(),
         "Ridge": make_pipeline(StandardScaler(), Ridge(alpha=10.0)),
@@ -25,26 +23,20 @@ def make_models():
 
 
 def raw_features(df, lags=LAGS):
-    """Features describing day t, using only data up to and including day t."""
     close = df["Close"]
     ret = close.pct_change()
 
     f = pd.DataFrame(index=df.index)
     for i in range(lags):
-        f[f"ret_{i}"] = ret.shift(i)                 # today's return, yesterday's, ...
+        f[f"ret_{i}"] = ret.shift(i)                 
     f["dist_ma20"] = close / close.rolling(20).mean() - 1
     f["dist_ma50"] = close / close.rolling(50).mean() - 1
-    f["vol_10"] = ret.rolling(10).std()              # recent volatility
+    f["vol_10"] = ret.rolling(10).std()              
     f["vol_chg"] = df["Volume"].pct_change().replace([np.inf, -np.inf], np.nan)
     return f, ret
 
 
 def build_dataset(df, lags=LAGS):
-    """
-    Row t of X = features known at the END of day t-1; y = return on day t.
-    The shift(1) is what prevents look-ahead leakage.
-    Also returns `latest`: features as of the last day, used to predict tomorrow.
-    """
     feats, ret = raw_features(df, lags)
     data = feats.shift(1)
     data["target"] = ret
@@ -54,10 +46,6 @@ def build_dataset(df, lags=LAGS):
 
 
 def train_and_evaluate(df, test_frac=0.2):
-    """
-    Trains every model on the oldest 80% of the history, tests on the newest 20%.
-    Pass the FULL history here (not a zoomed-in period) so there is enough data.
-    """
     X, y, latest = build_dataset(df)
     if len(X) < MIN_ROWS:
         raise ValueError(f"Need at least {MIN_ROWS} usable rows, got {len(X)}.")
@@ -66,8 +54,8 @@ def train_and_evaluate(df, test_frac=0.2):
     X_train, X_test = X.iloc[:split], X.iloc[split:]
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
-    baseline_dir = (y_test > 0).mean()        # "always predict up"
-    baseline_mae = y_test.abs().mean()        # "always predict 0% return"
+    baseline_dir = (y_test > 0).mean()        
+    baseline_mae = y_test.abs().mean()        
 
     rows, test_preds = [], pd.DataFrame({"actual": y_test})
     for name, model in make_models().items():
@@ -94,6 +82,6 @@ def train_and_evaluate(df, test_frac=0.2):
         "n_train": len(X_train),
         "n_test": len(X_test),
         "test_start": X_test.index[0],
-        "test_preds": test_preds,   # actual vs predicted per day, handy for backtesting
+        "test_preds": test_preds,   
         "best_model": results["RMSE (%)"].idxmin(),
     }
