@@ -18,7 +18,7 @@ PERIOD_DAYS = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 182
 
 
 
-@sl.cache_data(show_spinner="Training models...")
+@sl.cache_data(ttl=3600, show_spinner="Training models...")
 def run_models(ticker):
     return train_and_evaluate(get_data(ticker)) 
 
