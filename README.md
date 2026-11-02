@@ -22,7 +22,11 @@ as a learning exercise in time-series evaluation (chronological
 train/test split, baseline comparison), not as a trading tool.
 
 ## Run locally
-    git clone <https://github.com/zayemo7/stock_sensibly.git>
+    python -m venv .myenv
+    source .myenv/bin/activate
+## Check  if git is installed locally via git--version
+
+    git clone https://github.com/zayemo7/stock_sensibly.git
     cd stocksense
     pip install -r requirements.txt
     streamlit run ss.py
